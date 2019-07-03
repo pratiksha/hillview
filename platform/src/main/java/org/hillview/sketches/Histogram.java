@@ -17,6 +17,7 @@
 
 package org.hillview.sketches;
 
+import org.apache.commons.math3.distribution.LaplaceDistribution;
 import org.hillview.table.api.IColumn;
 import org.hillview.table.api.IMembershipSet;
 import org.hillview.table.api.ISampledRowIterator;
@@ -30,6 +31,29 @@ public class Histogram extends HistogramBase {
     public Histogram(final IHistogramBuckets bucketDescription) {
         this.bucketDescription = bucketDescription;
         this.buckets = new long[bucketDescription.getNumOfBuckets()];
+    }
+
+    public Histogram(Histogram other) {
+        this.bucketDescription = other.bucketDescription;
+        this.buckets = other.buckets.clone();
+    }
+
+    /* Adds Laplace noise with mean 1/epsilon to each bucket.
+     * Only needs to be called once per invocation of the histogram with these buckets.
+     * Returns a new histogram so that noise can be recomputed on this histogram if needed. */
+    public Histogram addLaplaceNoise(double epsilon) {
+        Histogram newHist = new Histogram(this);
+
+        LaplaceDistribution noiseDist = new LaplaceDistribution(0.0, 1.0/epsilon);
+
+        double[] samples = noiseDist.sample(this.buckets.length);
+
+        for ( int i = 0; i < newHist.buckets.length; i++ ) {
+            // add noise to each bucket
+            newHist.buckets[i] += samples[i];
+        }
+
+        return newHist;
     }
 
     public void rescale(double sampleRate) {
@@ -63,13 +87,6 @@ public class Histogram extends HistogramBase {
         }
         this.rescale(myIter.rate());
     }
-
-    public long getMissingData() { return this.missingData; }
-
-    /**
-     * @return the index's bucket count
-     */
-    public long getCount(final int index) { return this.buckets[index]; }
 
     /**
      * @param  otherHistogram with the same bucketDescription

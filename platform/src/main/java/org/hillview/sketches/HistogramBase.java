@@ -24,4 +24,11 @@ import java.io.Serializable;
 public abstract class HistogramBase implements Serializable, IJson {
     protected long[] buckets = new long[0];
     protected long missingData;
+
+    public long getMissingData() { return this.missingData; }
+
+    /**
+     * @return the index's bucket count
+     */
+    public long getCount(final int index) { return this.buckets[index]; }
 }
