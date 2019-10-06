@@ -3,15 +3,15 @@ package org.hillview.dataStructures;
 import org.apache.commons.math3.distribution.LaplaceDistribution;
 import org.hillview.dataset.api.IJson;
 import org.hillview.dataset.api.Pair;
-import org.hillview.sketches.DyadicHistogramBuckets;
+import org.hillview.sketches.TreeHistogramBuckets;
 import org.hillview.sketches.Heatmap;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 
 public class PrivateHeatmap implements Serializable, IJson {
-    private DyadicHistogramBuckets bucketDescriptionX;
-    private DyadicHistogramBuckets bucketDescriptionY;
+    private TreeHistogramBuckets bucketDescriptionX;
+    private TreeHistogramBuckets bucketDescriptionY;
 
     public Heatmap heatmap;
 
@@ -20,8 +20,8 @@ public class PrivateHeatmap implements Serializable, IJson {
     public PrivateHeatmap(Heatmap heatmap, double epsilon) {
         this.heatmap = heatmap;
 
-        this.bucketDescriptionX = (DyadicHistogramBuckets)heatmap.getBucketDescX();
-        this.bucketDescriptionY = (DyadicHistogramBuckets)heatmap.getBucketDescY();
+        this.bucketDescriptionX = (TreeHistogramBuckets)heatmap.getBucketDescX();
+        this.bucketDescriptionY = (TreeHistogramBuckets)heatmap.getBucketDescY();
 
         this.epsilon = epsilon;
 

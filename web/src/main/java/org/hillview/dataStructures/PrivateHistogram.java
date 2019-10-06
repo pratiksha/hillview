@@ -3,11 +3,10 @@ package org.hillview.dataStructures;
 import org.apache.commons.math3.distribution.LaplaceDistribution;
 import org.hillview.dataset.api.IJson;
 import org.hillview.dataset.api.Pair;
-import org.hillview.sketches.DyadicHistogramBuckets;
+import org.hillview.sketches.TreeHistogramBuckets;
 import org.hillview.sketches.Histogram;
 import org.hillview.utils.Converters;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 
 /**
@@ -16,7 +15,7 @@ import java.util.ArrayList;
  */
 @SuppressWarnings("MismatchedReadAndWriteOfArray")
 public class PrivateHistogram extends HistogramPrefixSum implements IJson {
-    private DyadicHistogramBuckets bucketDescription; // Just an alias for the buckets in the histogram.
+    private TreeHistogramBuckets bucketDescription; // Just an alias for the buckets in the histogram.
 
     private double[] confMins;
     private double[] confMaxes;
@@ -25,7 +24,7 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
 
     public PrivateHistogram(final Histogram histogram, double epsilon, boolean cdf) {
         super(histogram);
-        this.bucketDescription = (DyadicHistogramBuckets)histogram.getBucketDescription();
+        this.bucketDescription = (TreeHistogramBuckets)histogram.getBucketDescription();
         this.confMins  = new double[this.bucketDescription.getNumOfBuckets()];
         this.confMaxes = new double[this.bucketDescription.getNumOfBuckets()];
         this.epsilon = epsilon;

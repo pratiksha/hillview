@@ -1,7 +1,6 @@
-package org.hillview.table;
+package org.hillview.privacy;
 
 import org.hillview.dataset.api.IJson;
-import org.hillview.table.rows.PrivacyMetadata;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -17,14 +16,14 @@ import java.util.HashMap;
  * in alphabetical order, with "+" as the delimiter.
  * */
 public class PrivacySchema implements IJson {
-    HashMap<String, PrivacyMetadata> metadata;
+    HashMap<String, PrivacyMetadata> schema;
 
-    public PrivacySchema(HashMap<String, PrivacyMetadata> metadata) {
-        this.metadata = metadata;
+    public PrivacySchema(HashMap<String, PrivacyMetadata> schema) {
+        this.schema = schema;
     }
 
     public PrivacyMetadata get(String colName) {
-        return metadata.get(colName);
+        return schema.get(colName);
     }
 
     public PrivacyMetadata get(String[] colNames) {
@@ -35,7 +34,7 @@ public class PrivacySchema implements IJson {
             key += "+";
         }
         key += colNames[colNames.length - 1];
-        return metadata.get(key);
+        return schema.get(key);
     }
 
     public static PrivacySchema loadFromString(String jsonString) {

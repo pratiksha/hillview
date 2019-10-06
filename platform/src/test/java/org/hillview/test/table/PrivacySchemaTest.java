@@ -1,7 +1,8 @@
 package org.hillview.test.table;
 
-import org.hillview.table.PrivacySchema;
-import org.hillview.table.rows.PrivacyMetadata;
+import org.hillview.privacy.NumericPrivacyMetadata;
+import org.hillview.privacy.PrivacySchema;
+import org.hillview.privacy.PrivacyMetadata;
 import org.hillview.test.BaseTest;
 
 import org.junit.Test;
@@ -14,8 +15,8 @@ public class PrivacySchemaTest extends BaseTest {
    @Test
     public void serializeMetadataTest() {
         HashMap<String, PrivacyMetadata> mdMap = new HashMap<String, PrivacyMetadata>();
-        PrivacyMetadata md1 = new PrivacyMetadata(0.1, 10.5, 0.0, 123.45);
-        PrivacyMetadata md2 = new PrivacyMetadata(0.5, 15.0, -0.5, 13.1);
+        PrivacyMetadata md1 = new NumericPrivacyMetadata(0.1, 10.5, 0.0, 123.45);
+        PrivacyMetadata md2 = new NumericPrivacyMetadata(0.5, 15.0, -0.5, 13.1);
         mdMap.put("col1", md1);
         mdMap.put("col2", md2);
         PrivacySchema mdSchema = new PrivacySchema(mdMap);
@@ -46,8 +47,8 @@ public class PrivacySchemaTest extends BaseTest {
     @Test
     public void serializeMultipleColumnsTest() {
         HashMap<String, PrivacyMetadata> mdMap = new HashMap<>();
-        PrivacyMetadata md1 = new PrivacyMetadata(0.1, 10.5, 0.0, 123.45);
-        PrivacyMetadata md2 = new PrivacyMetadata(0.5, 15.0, -0.5, 13.1);
+        PrivacyMetadata md1 = new NumericPrivacyMetadata(0.1, 10.5, 0.0, 123.45);
+        PrivacyMetadata md2 = new NumericPrivacyMetadata(0.5, 15.0, -0.5, 13.1);
         PrivacyMetadata md12 = new PrivacyMetadata(0.25);
         mdMap.put("col1", md1);
         mdMap.put("col2", md2);

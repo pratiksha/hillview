@@ -1,4 +1,4 @@
-package org.hillview.table.rows;
+package org.hillview.privacy;
 
 import org.hillview.dataset.api.IJson;
 
@@ -7,12 +7,7 @@ import javax.annotation.Nullable;
 /**
  * This class represents metadata used for computing differentially-private mechanisms.
  */
-public class PrivacyMetadata implements IJson {
-    /**
-     * Total privacy budget allotted to this column.
-     */
-    public double epsilon;
-
+public class NumericPrivacyMetadata extends PrivacyMetadata implements IJson {
     /**
      * Minimum quantization interval: users will only be able to
      * query ranges that are a multiple of this size.
@@ -36,19 +31,11 @@ public class PrivacyMetadata implements IJson {
     @Nullable
     public double globalMax;
 
-    public PrivacyMetadata(double epsilon, double granularity,
-                           double globalMin, double globalMax) {
-        this.epsilon = epsilon;
+    public NumericPrivacyMetadata(double epsilon, double granularity,
+                                  double globalMin, double globalMax) {
+        super(epsilon);
         this.granularity = granularity;
         this.globalMin = globalMin;
         this.globalMax = globalMax;
-    }
-
-    /**
-     * 2d histograms are computed based on the granularity, min, and max of the underlying 1d histograms,
-     * so their metadata only contains the corresponding epsilon value.
-     */
-    public PrivacyMetadata(double epsilon) {
-        this.epsilon = epsilon;
     }
 }

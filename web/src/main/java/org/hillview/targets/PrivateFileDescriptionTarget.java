@@ -10,7 +10,7 @@ import org.hillview.maps.LoadFilesMapper;
 import org.hillview.sketches.FileSizeSketch;
 import org.hillview.storage.FileSetDescription;
 import org.hillview.storage.IFileReference;
-import org.hillview.table.PrivacySchema;
+import org.hillview.privacy.PrivacySchema;
 import org.hillview.table.api.ITable;
 
 import java.nio.file.Paths;

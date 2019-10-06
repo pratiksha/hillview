@@ -1,7 +1,7 @@
 package org.hillview.test.dataStructures;
 
 import org.hillview.dataset.api.Pair;
-import org.hillview.sketches.DyadicHistogramBuckets;
+import org.hillview.sketches.NumericPrivateBuckets;
 import org.hillview.test.BaseTest;
 import org.junit.Assert;
 import org.junit.Test;
@@ -14,7 +14,7 @@ public class DyadicDecompositionTest extends BaseTest {
         int leftLeafIdx = 0;
         int rightLeafIdx = 10;
 
-        ArrayList<Pair<Integer, Integer>> ret = DyadicHistogramBuckets.dyadicDecomposition(leftLeafIdx, rightLeafIdx);
+        ArrayList<Pair<Integer, Integer>> ret = NumericPrivateBuckets.dyadicDecomposition(leftLeafIdx, rightLeafIdx);
 
         Assert.assertNotNull(ret);
         Pair<Integer, Integer> e = ret.get(0);

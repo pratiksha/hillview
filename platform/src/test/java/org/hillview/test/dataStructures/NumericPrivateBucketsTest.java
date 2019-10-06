@@ -1,44 +1,14 @@
 package org.hillview.test.dataStructures;
 
-import org.hillview.sketches.DyadicHistogramBuckets;
-import org.hillview.table.ColumnDescription;
-import org.hillview.table.api.ContentsKind;
-import org.hillview.table.columns.DoubleArrayColumn;
-import org.hillview.table.rows.PrivacyMetadata;
+import org.hillview.sketches.NumericPrivateBuckets;
+import org.hillview.sketches.TreeHistogramBuckets;
+import org.hillview.privacy.NumericPrivacyMetadata;
 import org.hillview.test.BaseTest;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-public class DyadicBucketsTest extends BaseTest {
-    // Generate a column s.t. value i for i in [minVal, maxVal) is repeated nPerValue times.
-    private static DoubleArrayColumn generateLinearColumn(final int minVal, final int maxVal, final int nPerValue) {
-        final ColumnDescription desc = new
-                  ColumnDescription("Linear", ContentsKind.Double);
-        final DoubleArrayColumn col = new DoubleArrayColumn(desc, (maxVal - minVal) * nPerValue);
-        for (int i = minVal; i < maxVal; i++) {
-            for (int j = 0; j < nPerValue; j++) {
-                col.set(i*nPerValue + j, (double)i);
-            }
-        }
-        return col;
-    }
-
-    // Just make sure the linear column generator works
-    @Test
-    public void testLinearColumnContents() {
-        final int numValues = 13;
-        final int nPerValue = 7;
-
-        DoubleArrayColumn col = generateLinearColumn(0, numValues, nPerValue);
-
-        for (int i = 0; i < numValues; i++) {
-            for (int j = 0; j < nPerValue; j++) {
-                assertEquals(col.getDouble(i*nPerValue+j), i, 1e-3);
-            }
-        }
-    }
-
+public class NumericPrivateBucketsTest extends BaseTest {
     // When the number of buckets is more than the number of leaves,
     // buckets should automatically round down to number of leaves.
     @Test
@@ -48,8 +18,8 @@ public class DyadicBucketsTest extends BaseTest {
         final int numBuckets = 10;
         final int granularity = 20;
         final double epsilon = 0.01;
-        DyadicHistogramBuckets buckDes = new DyadicHistogramBuckets(min, max, numBuckets,
-                new PrivacyMetadata(epsilon, granularity, min, max));
+        TreeHistogramBuckets buckDes = new NumericPrivateBuckets(min, max, numBuckets,
+                new NumericPrivacyMetadata(epsilon, granularity, min, max));
 
         // should create only 100/20 = 5 buckets
         assert(buckDes.getNumOfBuckets() == 5);
@@ -63,8 +33,8 @@ public class DyadicBucketsTest extends BaseTest {
         final int numBuckets = 4; // creates buckets of size 25...
         final int granularity = 10; // but leaves of size 10
         final double epsilon = 0.01;
-        DyadicHistogramBuckets buckDes = new DyadicHistogramBuckets(min, max, numBuckets,
-                new PrivacyMetadata(epsilon, granularity, min, max));
+        TreeHistogramBuckets buckDes = new NumericPrivateBuckets(min, max, numBuckets,
+                new NumericPrivacyMetadata(epsilon, granularity, min, max));
 
         // Check that values fall in correct buckets based on leaves
         int expectedBucket;
@@ -103,8 +73,8 @@ public class DyadicBucketsTest extends BaseTest {
         final int numBuckets = 4; // creates buckets of size 0.025...
         final double granularity = 0.01; // but leaves of size 0.01
         final double epsilon = 0.01;
-        DyadicHistogramBuckets buckDes = new DyadicHistogramBuckets(min, max, numBuckets,
-                new PrivacyMetadata(epsilon, granularity, min, max));
+        TreeHistogramBuckets buckDes = new NumericPrivateBuckets(min, max, numBuckets,
+                new NumericPrivacyMetadata(epsilon, granularity, min, max));
         // TODO
         for (int i = 0; i < buckDes.getNumOfBuckets(); i++) {
             System.out.println("> " + i);
@@ -120,8 +90,8 @@ public class DyadicBucketsTest extends BaseTest {
         final int numBuckets = 10;
         final double granularity = 25;
         final double epsilon = 0.01;
-        DyadicHistogramBuckets buckDes = new DyadicHistogramBuckets(min, max, numBuckets,
-                new PrivacyMetadata(epsilon, granularity, min, max));
+        TreeHistogramBuckets buckDes = new NumericPrivateBuckets(min, max, numBuckets,
+                new NumericPrivacyMetadata(epsilon, granularity, min, max));
         // TODO
         for (int i = 0; i < buckDes.getNumOfBuckets(); i++) {
             System.out.println("> " + i);
@@ -137,8 +107,8 @@ public class DyadicBucketsTest extends BaseTest {
         final int numBuckets = 4; // creates buckets of size 0.025...
         final double granularity = 0.01; // but leaves of size 0.01
         final double epsilon = 0.01;
-        DyadicHistogramBuckets buckDes = new DyadicHistogramBuckets(min, max, numBuckets,
-                new PrivacyMetadata(epsilon, granularity, min, max));
+        TreeHistogramBuckets buckDes = new NumericPrivateBuckets(min, max, numBuckets,
+                new NumericPrivacyMetadata(epsilon, granularity, min, max));
 
         // Check that values fall in correct buckets based on leaves
         int expectedBucket;

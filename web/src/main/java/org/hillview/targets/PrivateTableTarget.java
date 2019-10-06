@@ -10,7 +10,7 @@ import org.hillview.dataset.api.Pair;
 import org.hillview.dataStructures.PrivateHistogram;
 import org.hillview.sketches.*;
 import org.hillview.table.ColumnDescription;
-import org.hillview.table.PrivacySchema;
+import org.hillview.privacy.PrivacySchema;
 import org.hillview.table.Schema;
 import org.hillview.table.api.ITable;
 import org.hillview.table.rows.PrivacyMetadata;
@@ -97,17 +97,17 @@ public class PrivateTableTarget extends RpcTarget {
             this.metadata = privacySchema.get(this.cd.name);
         }
 
-        DyadicHistogramBuckets getBuckets() {
+        TreeHistogramBuckets getBuckets() {
             if (!cd.kind.isNumeric())
                 throw new RuntimeException("Attempted to instantiate private buckets with non-numeric column");
 
             // This bucket class ensures that computed buckets fall on leaf boundaries.
-            return new DyadicHistogramBuckets(this.min, this.max,
+            return new TreeHistogramBuckets(this.min, this.max,
                     this.bucketCount, metadata);
         }
 
         HistogramSketch getSketch() {
-            DyadicHistogramBuckets buckets = this.getBuckets();
+            TreeHistogramBuckets buckets = this.getBuckets();
             return new HistogramSketch(buckets, this.cd.name, this.samplingRate, this.seed);
         }
     }
