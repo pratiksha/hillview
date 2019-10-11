@@ -90,9 +90,9 @@ public class PrivateSimpleDBTarget extends SimpleDBTarget {
         // TODO: compute these too
         retRange.presentCount = -1;
         retRange.missingCount = -1;
-        PrecomputedSketch<ITable, DataRange> sk =
-                new PrecomputedSketch<ITable, DataRange>(retRange, new DoubleDataRangeSketch(args[0].cd.name));
-        BiFunction<DataRange, HillviewComputation, JsonList<BucketsInfo>> post = (e, c) -> {
+        PrecomputedSketch<ITable, BucketsInfo> sk =
+                new PrecomputedSketch<ITable, BucketsInfo>(retRange, new DoubleDataRangeSketch(args[0].cd.name));
+        BiFunction<BucketsInfo, HillviewComputation, JsonList<BucketsInfo>> post = (e, c) -> {
             JsonList<BucketsInfo> result = new JsonList<BucketsInfo>(1);
             result.add(e);
             return result;

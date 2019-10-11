@@ -1,40 +1,25 @@
-/*
- * Copyright (c) 2018 VMware Inc. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.hillview.sketches;
 
 import org.hillview.dataset.api.ISketch;
 import org.hillview.sketches.results.BucketsInfo;
 import org.hillview.sketches.results.DataRange;
+import org.hillview.sketches.results.StringBucketLeftBoundaries;
 import org.hillview.table.api.IColumn;
 import org.hillview.table.api.IRowIterator;
 import org.hillview.table.api.ITable;
 import org.hillview.utils.Converters;
+import org.hillview.utils.JsonList;
 
 import javax.annotation.Nullable;
 
 /**
- * A sketch that computes the range of data in a column where values can be
- * converted to doubles.
+ * This class is mainly for use with the PrecomputedSketch.
+ * Since the notion of adding a set of left boundaries is ill-defined, the add function does nothing here.
  */
-public class DoubleDataRangeSketch implements ISketch<ITable, BucketsInfo> {
+public class StringBoundariesSketch implements ISketch<ITable, BucketsInfo> {
     private final String col;
 
-    public DoubleDataRangeSketch(String col) {
+    public StringBoundariesSketch(String col) {
         this.col = col;
     }
 
@@ -57,12 +42,10 @@ public class DoubleDataRangeSketch implements ISketch<ITable, BucketsInfo> {
     }
 
     @Override
-    public BucketsInfo zero() { return new DataRange(); }
+    public BucketsInfo zero() { return new StringBucketLeftBoundaries(new JsonList<String>(), "", true, 0, 0); }
 
     @Override
     public BucketsInfo add(@Nullable final BucketsInfo left, @Nullable final BucketsInfo right) {
-        assert left != null;
-        assert right != null;
-        return ((DataRange)left).add((DataRange)right);
+        return left;
     }
 }

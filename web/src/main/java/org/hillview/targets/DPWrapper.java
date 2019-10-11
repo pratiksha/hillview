@@ -20,16 +20,24 @@ package org.hillview.targets;
 import org.hillview.dataStructures.IDyadicDecomposition;
 import org.hillview.dataStructures.NumericDyadicDecomposition;
 import org.hillview.dataStructures.PrivacySchema;
+import org.hillview.dataStructures.StringDyadicDecomposition;
 import org.hillview.dataset.api.IJson;
+import org.hillview.sketches.DoubleDataRangeSketch;
 import org.hillview.sketches.HistogramSketch;
-import org.hillview.sketches.results.TableSummary;
+import org.hillview.sketches.PrecomputedSketch;
+import org.hillview.sketches.StringBoundariesSketch;
+import org.hillview.sketches.results.*;
 import org.hillview.table.ColumnDescription;
 import org.hillview.table.Schema;
+import org.hillview.table.api.ITable;
 import org.hillview.table.columns.ColumnPrivacyMetadata;
 import org.hillview.table.columns.DoubleColumnPrivacyMetadata;
+import org.hillview.table.columns.StringColumnPrivacyMetadata;
 import org.hillview.table.filters.RangeFilterDescription;
+import org.hillview.utils.JsonList;
 
 import javax.annotation.Nullable;
+import javax.swing.text.StyledEditorKit;
 import java.io.File;
 import java.util.HashMap;
 
@@ -95,14 +103,25 @@ class DPWrapper {
 
         double min;
         double max;
+
+        @Nullable
+        String minString;
+        @Nullable
+        String maxString; /* TODO this would be better as a generic class with dispatch for JSON. */
+
         int bucketCount;
 
         IDyadicDecomposition getDecomposition(ColumnPrivacyMetadata metadata) {
-            if (!cd.kind.isNumeric())
-                throw new RuntimeException("Attempted to instantiate private buckets with non-numeric column");
-            // This bucket class ensures that computed buckets fall on leaf boundaries.
-            return new NumericDyadicDecomposition(this.min, this.max,
-                    this.bucketCount, (DoubleColumnPrivacyMetadata)metadata);
+            if (cd.kind.isNumeric()) {
+                // This bucket class ensures that computed buckets fall on leaf boundaries.
+                return new NumericDyadicDecomposition(this.min, this.max,
+                        this.bucketCount, (DoubleColumnPrivacyMetadata) metadata);
+            } else if (cd.kind.isString()) {
+                return new StringDyadicDecomposition(this.minString, this.maxString,
+                        this.bucketCount, (StringColumnPrivacyMetadata) metadata);
+            } else {
+                throw new RuntimeException("Private buckets not supported for column class");
+            }
         }
 
         // This bucket class ensures that computed buckets fall on leaf boundaries.
@@ -110,6 +129,55 @@ class DPWrapper {
             IDyadicDecomposition dd = this.getDecomposition(metadata);
             return new HistogramSketch(dd.getHistogramBuckets(), this.cd.name,
                     this.samplingRate, this.seed, null);
+        }
+    }
+
+    public PrecomputedSketch<ITable, BucketsInfo> getColumnRange(ColumnDescription cd) {
+        if (cd.kind.isString()) {
+            String min, max;
+            StringColumnPrivacyMetadata md = (StringColumnPrivacyMetadata)this.privacySchema.get(cd.name);
+            RangeFilterDescription filter = this.columnLimits.get(cd.name);
+            if (filter == null) {
+                min = md.leftBoundaries[0];
+                max = md.globalMax;
+            } else {
+                min = md.roundDown(filter.minString);
+                max = md.roundDown(filter.maxString);
+            }
+
+            JsonList<String> filteredBoundaries = new JsonList<>();
+            for (int i = 0; i < md.leftBoundaries.length; i++) {
+                if (md.leftBoundaries[i].compareTo(min) >= 0 && md.leftBoundaries[i].compareTo(max) < 0) {
+                    filteredBoundaries.add(md.leftBoundaries[i]);
+                }
+            }
+            StringBucketLeftBoundaries leftBoundaries =
+                    new StringBucketLeftBoundaries(filteredBoundaries, max, true, -1, -1); // TODO present/missing count
+
+            PrecomputedSketch<ITable, BucketsInfo> sk =
+                    new PrecomputedSketch<>(leftBoundaries, new StringBoundariesSketch(cd.name));
+
+            return sk;
+        } else {
+            double min, max;
+            DoubleColumnPrivacyMetadata md = (DoubleColumnPrivacyMetadata)this.privacySchema.get(cd.name);
+            RangeFilterDescription filter = this.columnLimits.get(cd.name);
+            if (filter == null) {
+                min = md.globalMin;
+                max = md.globalMax;
+            } else {
+                min = md.roundDown(filter.min);
+                max = md.roundUp(filter.max);
+            }
+
+            DataRange retRange = new DataRange(min, max);
+            retRange.presentCount = -1;
+            retRange.missingCount = -1;
+
+            PrecomputedSketch<ITable, BucketsInfo> sk =
+                    new PrecomputedSketch<>(retRange, new DoubleDataRangeSketch(cd.name));
+
+            return sk;
         }
     }
 }

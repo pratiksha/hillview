@@ -291,6 +291,9 @@ export interface HistogramArgs {
     // only used when doing double histograms
     min?: number;
     max?: number;
+    // used for private string histograms
+    minString?: string;
+    maxString?: string;
 }
 
 // Data returned by private histogram call
@@ -306,18 +309,6 @@ export interface PrivateHistogramData {
     confMaxes: number[];
 
     missingData: number;
-}
-
-export interface PrivateHistogramArgs {
-    cd: IColumnDescription;
-    seed: number;
-    samplingRate: number;
-    bucketCount: number;
-    epsilon: number;
-    granularity: number;
-
-    min?: number;
-    max?: number;
 }
 
 export interface HeavyHittersFilterInfo {

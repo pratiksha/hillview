@@ -75,7 +75,7 @@ public class BatchLogAnalysis {
 
         /* Find Timestamp (x-axis) buckets for the heatmap */
         DoubleDataRangeSketch rangeSketch = new DoubleDataRangeSketch("Timestamp");
-        DataRange dataRange = table1.blockingSketch(rangeSketch);
+        DataRange dataRange = (DataRange)(table1.blockingSketch(rangeSketch));
         assert dataRange != null;
         DoubleHistogramBuckets bucketsTimestamp = new DoubleHistogramBuckets(dataRange.min, dataRange.max, numOfTimestampBuckets);
 

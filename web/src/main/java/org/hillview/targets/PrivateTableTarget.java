@@ -69,24 +69,9 @@ public class PrivateTableTarget extends RpcTarget {
     public void getDataRanges1D(RpcRequest request, RpcRequestContext context) {
         RangeArgs[] args = request.parseArgs(RangeArgs[].class);
         assert args.length == 1;
-        double min, max;
-        DoubleColumnPrivacyMetadata md = (DoubleColumnPrivacyMetadata)this.wrapper.privacySchema.get(
-                args[0].cd.name);
-        RangeFilterDescription filter = this.wrapper.columnLimits.get(args[0].cd.name);
-        if (filter == null) {
-            min = md.globalMin;
-            max = md.globalMax;
-        } else {
-            min = md.roundDown(filter.min);
-            max = md.roundUp(filter.max);
-        }
 
-        DataRange retRange = new DataRange(min, max);
-        retRange.presentCount = -1;
-        retRange.missingCount = -1;
-        PrecomputedSketch<ITable, DataRange> sk =
-                new PrecomputedSketch<ITable, DataRange>(retRange, new DoubleDataRangeSketch(args[0].cd.name));
-        BiFunction<DataRange, HillviewComputation, JsonList<BucketsInfo>> post = (e, c) -> {
+        PrecomputedSketch<ITable, BucketsInfo> sk = this.wrapper.getColumnRange(args[0].cd);
+        BiFunction<BucketsInfo, HillviewComputation, JsonList<BucketsInfo>> post = (e, c) -> {
             JsonList<BucketsInfo> result = new JsonList<BucketsInfo>(1);
             result.add(e);
             return result;
@@ -160,13 +145,13 @@ public class PrivateTableTarget extends RpcTarget {
             retRange.missingCount = -1;
             precomputed[i] = retRange;
         }
-        PrecomputedSketch<ITable, Pair<DataRange, DataRange>> sk =
-                new PrecomputedSketch<ITable, Pair<DataRange, DataRange>>(
-                        new Pair<DataRange, DataRange>(precomputed[0], precomputed[1]),
-                        new ConcurrentSketch<ITable, DataRange, DataRange>(
+        PrecomputedSketch<ITable, Pair<BucketsInfo, BucketsInfo>> sk =
+                new PrecomputedSketch<ITable, Pair<BucketsInfo, BucketsInfo>>(
+                        new Pair<BucketsInfo, BucketsInfo>(precomputed[0], precomputed[1]),
+                        new ConcurrentSketch<ITable, BucketsInfo, BucketsInfo>(
                             new DoubleDataRangeSketch(args[0].cd.name),
                             new DoubleDataRangeSketch(args[1].cd.name)));
-        BiFunction<Pair<DataRange, DataRange>, HillviewComputation, JsonList<BucketsInfo>> post = (e, c) -> {
+        BiFunction<Pair<BucketsInfo, BucketsInfo>, HillviewComputation, JsonList<BucketsInfo>> post = (e, c) -> {
             JsonList<BucketsInfo> result = new JsonList<BucketsInfo>(1);
             result.add(e.first);
             result.add(e.second);

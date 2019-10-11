@@ -190,7 +190,9 @@ export class DataRangesReceiver extends OnCompleteReceiver<DataRange[]> {
                 seed: Seed.instance.getSampled(samplingRate),
                 samplingRate: samplingRate,
                 leftBoundaries: bounds,
-                bucketCount: bounds.length
+                bucketCount: bounds.length,
+                minString: range.leftBoundaries[0],
+                maxString: range.maxBoundary,
             };
             return args;
         } else {

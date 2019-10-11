@@ -47,9 +47,9 @@ public class RangeArgs {
             //noinspection unchecked
             return (ISketch<ITable, BucketsInfo>)(Object)s;
         } else {
-            ISketch<ITable, DataRange> s = new DoubleDataRangeSketch(this.cd.name);
+            ISketch<ITable, BucketsInfo> s = new DoubleDataRangeSketch(this.cd.name);
             //noinspection unchecked
-            return (ISketch<ITable, BucketsInfo>)(Object)s;
+            return s;
         }
     }
 

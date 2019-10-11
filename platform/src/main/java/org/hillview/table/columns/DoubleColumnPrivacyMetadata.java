@@ -17,6 +17,8 @@
 
 package org.hillview.table.columns;
 
+import org.hillview.sketches.results.DataRange;
+
 /**
  * This class represents metadata used for computing differentially-private mechanisms
  * for columns storing doubles.
