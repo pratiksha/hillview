@@ -36,16 +36,16 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
     }
 
     /**
-     * Compute noise for the given [left leaf, right leaf) range using the dyadic decomposition.
+     * Compute mean for the given [left leaf, right leaf) range using the dyadic decomposition.
      * See also noiseForBucket.
      */
     public long noiseForRange(int left, int right,
                               double scale, double baseVariance,
                              /*out*/Noise noise) {
-        List<Pair<Integer, Integer>> intervals = IntervalDecomposition.kadicDecomposition(left, right, 20);
+        List<Pair<Integer, Integer>> intervals = IntervalDecomposition.kadicDecomposition(left, right, IntervalDecomposition.BRANCHING_FACTOR);
         noise.clear();
         for (Pair<Integer, Integer> x : intervals) {
-            noise.noise += this.laplace.sampleLaplace(x, scale);
+            noise.mean += this.laplace.sampleLaplace(x, scale);
             noise.variance += baseVariance;
         }
 
@@ -53,14 +53,14 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
     }
 
     /**
-     * Compute noise to add to this bucket using the dyadic decomposition as the PRG seed.
-     * @param bucketIdx: index of the bucket to compute noise for.
+     * Compute mean to add to this bucket using the dyadic decomposition as the PRG seed.
+     * @param bucketIdx: index of the bucket to compute mean for.
      * @param scale:      scale of laplace distribution used to sample data
      * @param baseVariance:  factor added to variance for each bucket
-     * @param isCdf: If true, computes the noise based on the dyadic decomposition of the interval [0, bucket right leaf]
+     * @param isCdf: If true, computes the mean based on the dyadic decomposition of the interval [0, bucket right leaf]
      *             rather than [bucket left leaf, bucket right leaf].
      * @param decomposition: Specifies the dyadic decomposition to use when computing the nodes for this bucket.
-     * Returns the noise and the total variance of the variables used to compute the noise.
+     * Returns the mean and the total variance of the variables used to compute the mean.
      */
     @SuppressWarnings("ConstantConditions")
     long noiseForBucket(int bucketIdx,
@@ -72,11 +72,11 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
     }
 
     /**
-     * Adds noise to CDF and then recomputes.
+     * Adds mean to CDF and then recomputes.
      * Note that this is more complicated than simply integrating the noisy buckets,
-     * since we would like to take advantage of the dyadic tree to add noise more efficiently.
+     * since we would like to take advantage of the dyadic tree to add mean more efficiently.
      * This function uses the dyadic decomposition of each prefix to add the smallest amount of
-     * noise for that prefix.
+     * mean for that prefix.
      */
     private void recomputeCDF(IntervalDecomposition decomposition) {
         int totalLeaves = decomposition.getQuantizationIntervalCount();
@@ -88,7 +88,7 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
             noise.clear();
             this.noiseForBucket(
                     i, scale, baseVariance, true, noise, decomposition);
-            this.cdfBuckets[i] += noise.noise;
+            this.cdfBuckets[i] += noise.mean;
             if (i > 0) {
                 // Postprocess CDF to be monotonically increasing
                 this.cdfBuckets[i] = Math.max(this.cdfBuckets[i-1], this.cdfBuckets[i]);
@@ -97,14 +97,14 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
     }
 
     /**
-     * Add Laplace noise compatible with the binary mechanism to each bucket.
+     * Add Laplace mean compatible with the binary mechanism to each bucket.
      * Noise is added as follows:
      * Let T := (globalMax - globalMin) / granularity, the total number of leaves in the data overall.
-     * Each node in the dyadic interval tree is perturbed by an independent noise variable distributed as Laplace(log T / epsilon).
-     * The total noise is the sum of the noise variables in the intervals composing the desired interval or bucket.
+     * Each node in the dyadic interval tree is perturbed by an independent mean variable distributed as Laplace(log T / epsilon).
+     * The total mean is the sum of the mean variables in the intervals composing the desired interval or bucket.
      */
     private long addDyadicLaplaceNoise(IntervalDecomposition decomposition) {
-        HillviewLogger.instance.info("Adding histogram noise with", "epsilon={0}", this.epsilon);
+        HillviewLogger.instance.info("Adding histogram mean with", "epsilon={0}", this.epsilon);
         int totalLeaves = decomposition.getQuantizationIntervalCount();
         double scale = Math.log(totalLeaves + 1) / Math.log(2);  // +1 for NULL leaf
         scale /= epsilon;
@@ -116,7 +116,7 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
             long nIntervals = this.noiseForBucket(
                     i, scale, baseVariance, false, noise, decomposition);
             totalIntervals += nIntervals;
-            this.histogram.buckets[i] += noise.noise;
+            this.histogram.buckets[i] += noise.mean;
             this.confidence[i] = (int)noise.getConfidence();
         }
         return totalIntervals;

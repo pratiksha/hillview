@@ -129,7 +129,7 @@ public class PrivateTableTarget extends RpcTarget implements IPrivateDataset {
     public void hLogLog(RpcRequest request, RpcRequestContext context) {
         DistinctCountRequestInfo col = request.parseArgs(DistinctCountRequestInfo.class);
         HLogLogSketch sketch = new HLogLogSketch(col.columnName, col.seed);
-        // TODO(pratiksha): add noise to this count
+        // TODO(pratiksha): add mean to this count
         this.runSketch(this.table, sketch, request, context);
     }
 
@@ -137,7 +137,7 @@ public class PrivateTableTarget extends RpcTarget implements IPrivateDataset {
         HeavyHittersRequestInfo info = request.parseArgs(HeavyHittersRequestInfo.class);
         MGFreqKSketch sk = new MGFreqKSketch(info.columns, info.amount/100,
                 this.getPrivacySchema().quantization);
-        // TODO(pratiksha): add noise to the counts
+        // TODO(pratiksha): add mean to the counts
         this.runCompleteSketch(this.table, sk, (x, c) -> TableTarget.getTopList(x, info.columns, c),
                 request, context);
     }
@@ -186,7 +186,7 @@ public class PrivateTableTarget extends RpcTarget implements IPrivateDataset {
                 nextKArgs.firstRow, nextKArgs.order, nextKArgs.columnsNoValue);
         NextKSketch nk = new NextKSketch(nextKArgs.order, null, rs, nextKArgs.rowsOnScreen,
                 this.getPrivacySchema().quantization);
-        // TODO(pratiksha): add noise to the counts on the NextKList
+        // TODO(pratiksha): add mean to the counts on the NextKList
         this.runSketch(this.table, nk, request, context);
     }
 

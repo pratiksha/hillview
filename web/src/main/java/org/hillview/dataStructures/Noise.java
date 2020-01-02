@@ -18,12 +18,12 @@
 package org.hillview.dataStructures;
 
 public class Noise {
-    public double noise;
+    public double mean;
     public double variance;
     private double confidence;
 
     public Noise() {
-        this.noise = 0;
+        this.mean = 0;
         this.variance = 0;
         this.confidence = 0;
     }
@@ -35,7 +35,7 @@ public class Noise {
     }
 
     public void clear() {
-        this.noise = 0;
+        this.mean = 0;
         this.variance = 0;
         this.confidence = 0;
     }

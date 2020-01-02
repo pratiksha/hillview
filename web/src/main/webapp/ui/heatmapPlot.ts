@@ -77,10 +77,10 @@ export class HeatmapPlot extends Plot {
         const ctx: CanvasRenderingContext2D = htmlCanvas.getContext("2d");
         for (const dot of this.dots) {
             ctx.beginPath();
-            if (dot.confident)
-                ctx.fillStyle = this.legendPlot.getColor(dot.v);
-            else
-                ctx.fillStyle = "lightgrey";
+            //if (dot.confident)
+            ctx.fillStyle = this.legendPlot.getColor(dot.v);
+            //else
+            //    ctx.fillStyle = "lightgrey";
             ctx.fillRect(dot.x, dot.y, this.pointWidth, this.pointHeight);
             ctx.closePath();
         }

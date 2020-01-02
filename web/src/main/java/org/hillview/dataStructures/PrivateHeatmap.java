@@ -16,22 +16,54 @@ public class PrivateHeatmap implements Serializable, IJson {
     private double epsilon;
     private SecureLaplace laplace;
     static final boolean coarsen = false;
+    long totalLeaves;
+    double scale;
+    double baseVariance;
+
+    private IntervalDecomposition dx;
+    private IntervalDecomposition dy;
+
+    private boolean uncertainCells[][];
 
     public PrivateHeatmap(IntervalDecomposition d0, IntervalDecomposition d1,
                           Heatmap heatmap, double epsilon, SecureLaplace laplace) {
         this.heatmap = heatmap;
         this.epsilon = epsilon;
         this.laplace = laplace;
+
+        this.dx = d0;
+        this.dy = d1;
+
+        this.totalLeaves = (1 + d0.getQuantizationIntervalCount()) *
+                (1 + d1.getQuantizationIntervalCount());  // +1 for the NULL bucket
+        double scale = Math.log(totalLeaves) / Math.log(2);
+        scale /= epsilon;
+        this.scale = scale;
+        this.baseVariance = 2 * (Math.pow(scale, 2));
+
+        int xSize = this.heatmap.xBucketCount;
+        int ySize = this.heatmap.yBucketCount;
+
+        this.uncertainCells = new boolean[xSize][ySize];
+
         this.addDyadicLaplaceNoise(d0, d1);
+
+        this.greedyXCoarsen();
+
+        for (int i2 = 0; i2 < xSize; i2++) {
+            for (int j = 0; j < ySize; j++) {
+                this.heatmap.buckets[i2][j] = (long)this.heatmap.privateBuckets[i2][j];
+            }
+        }
     }
 
     /**
-     * Compute noise to add to this bucket using the dyadic decomposition as the PRG seed.
-     * If cdfBuckets is true, computes the noise based on the dyadic decomposition of the interval [0, bucket right leaf]
+     * Compute mean to add to this bucket using the dyadic decomposition as the PRG seed.
+     * If cdfBuckets is true, computes the mean based on the dyadic decomposition of the interval [0, bucket right leaf]
      * rather than [bucket left leaf, bucket right leaf].
-     * Returns the noise and the total variance of the variables used to compute the noise.
+     * Returns the mean and the total variance of the variables used to compute the mean.
      */
-    private void noiseForBucket(
+    private void noiseForDecomposition(
             List<Pair<Integer, Integer>> xIntervals,
             List<Pair<Integer, Integer>> yIntervals,
             double scale,
@@ -40,27 +72,32 @@ public class PrivateHeatmap implements Serializable, IJson {
         result.clear();
         for (Pair<Integer, Integer> x : xIntervals) {
             for (Pair<Integer, Integer> y : yIntervals) {
-                result.noise += this.laplace.sampleLaplace(x, y, scale);
+                result.mean += this.laplace.sampleLaplace(x, y, scale);
                 result.variance += baseVariance;
             }
         }
     }
 
-    private static boolean notConfident(long value, int noise) {
-        return value < noise;
+    private static boolean notConfident(double value, double threshold) {
+        return value < threshold;
     }
 
-    /**
-     * Add Laplace noise compatible with the binary mechanism to each bucket.
-     * Noise is added as follows:
-     * Let T := (globalMax - globalMin) / granularity, the total number of leaves in the data overall.
-     * Each node in the dyadic interval tree is perturbed by an independent noise variable distributed as Laplace(log T / epsilon).
-     * The total noise is the sum of the noise variables in the intervals composing the desired interval or bucket.
-     */
+    private void noiseForRange(int x0, int x1, int y0, int y1, double scale, double baseVariance, Noise noise) {
+        List<Pair<Integer, Integer>> xIntervals = IntervalDecomposition.kadicDecomposition(x0, x1, IntervalDecomposition.BRANCHING_FACTOR);
+        List<Pair<Integer, Integer>> yIntervals = IntervalDecomposition.kadicDecomposition(y0, y1, IntervalDecomposition.BRANCHING_FACTOR);
+        noiseForDecomposition(xIntervals, yIntervals, scale, baseVariance, noise);
+    }
+
+    private void noiseForRange(int x0, int x1, int y0, int y1, Noise noise) {
+        this.noiseForRange(x0, x1, y0, y1, this.scale, this.baseVariance, noise);
+    }
+
     private void addDyadicLaplaceNoise(IntervalDecomposition dx, IntervalDecomposition dy) {
-        HillviewLogger.instance.info("Adding heatmap noise with", "epsilon={0}", this.epsilon);
+        HillviewLogger.instance.info("Adding heatmap mean with", "epsilon={0}", this.epsilon);
         int xSize = this.heatmap.xBucketCount;
         int ySize = this.heatmap.yBucketCount;
+
+        // Precompute all the intervals for efficient computation
         List<List<Pair<Integer, Integer>>> xIntervals = new ArrayList<List<Pair<Integer, Integer>>>(xSize);
         List<List<Pair<Integer, Integer>>> yIntervals = new ArrayList<List<Pair<Integer, Integer>>>(ySize);
         for (int i = 0; i < xSize; i++)
@@ -68,97 +105,75 @@ public class PrivateHeatmap implements Serializable, IJson {
         for (int i = 0; i < ySize; i++)
             yIntervals.add(dy.bucketDecomposition(i, false));
 
+        // Compute the mean.
         Noise noise = new Noise();
         this.heatmap.allocateConfidence();
-        long totalLeaves = (1 + dx.getQuantizationIntervalCount()) *
-            (1 + dy.getQuantizationIntervalCount());  // +1 for the NULL bucket
-        double scale = Math.log(totalLeaves) / Math.log(2);
-        scale /= epsilon;
-        double baseVariance = 2 * (Math.pow(scale, 2));
         Converters.checkNull(this.heatmap.confidence);
 
-        boolean[][] noisy = new boolean[xSize][ySize];
         for (int i = 0; i < this.heatmap.buckets.length; i++) {
             for (int j = 0; j < this.heatmap.buckets[i].length; j++) {
-                this.noiseForBucket(xIntervals.get(i), yIntervals.get(j), scale, baseVariance, noise);
-                this.heatmap.buckets[i][j] += noise.noise;
-                this.heatmap.confidence[i][j] = (int)(2 * Math.sqrt(noise.variance));
-                noisy[i][j] = notConfident(this.heatmap.buckets[i][j], this.heatmap.confidence[i][j]);
-            }
-        }
-
-        if (!coarsen)
-            return;
-        
-        /* if some buckets are too noisy try to merge them with their neighbors */
-        int xRect = 1; // x size of merged rectangles
-        int yRect = 1; // y size of merged rectangles
-        boolean done = false;
-        while (!done) {
-            done = true;
-            if (xSize > 2 * xRect) {
-                xRect *= 2;
-                dx = dx.mergeNeighbors();
-                xIntervals.clear();
-                for (int i = 0; i < xSize / xRect; i++)
-                    xIntervals.add(dx.bucketDecomposition(i, false));
-                for (int y = 0; y < ySize; y += yRect) {
-                    for (int x = 0; x < xSize; x += xRect) {
-                        if (x + 2 * xRect < xSize && noisy[x][y] && noisy[x + xRect / 2][y]) {
-                            noisy[x][y] = this.average(x, xRect, y, yRect, xIntervals, yIntervals,
-                                    scale, baseVariance, noise);
-                            done = false;
-                        } else {
-                            noisy[x][y] = false;  // cannot merge this rectangle - we are done with it.
-                        }
-                    }
-                }
-            }
-            if (ySize > 2 * yRect) {
-                yRect *= 2;
-                dy = dy.mergeNeighbors();
-                yIntervals.clear();
-                for (int i = 0; i < ySize / yRect; i++)
-                    yIntervals.add(dy.bucketDecomposition(i, false));
-                for (int y = 0; y < ySize; y += yRect) {
-                    for (int x = 0; x < xSize; x += xRect) {
-                        if (y + 2 * yRect < ySize && noisy[x][y] && noisy[x][y + yRect / 2]) {
-                            noisy[x][y] = this.average(x, xRect, y, yRect, xIntervals, yIntervals,
-                                    scale, baseVariance, noise);
-                            done = false;
-                        } else {
-                            noisy[x][y] = false;
-                        }
-                    }
-                }
+                this.noiseForDecomposition(xIntervals.get(i), yIntervals.get(j), this.scale, this.baseVariance, noise);
+                this.heatmap.privateBuckets[i][j] = this.heatmap.buckets[i][j] + noise.mean;
+                this.heatmap.confidence[i][j] = noise.getConfidence();
+                this.uncertainCells[i][j] = notConfident(this.heatmap.privateBuckets[i][j], this.heatmap.confidence[i][j]);
             }
         }
     }
 
+    private boolean mergeXBuckets(int leftBucket, int rightBucket, int rowIdx) {
+        assert (leftBucket < rightBucket);
+
+        Pair<Integer, Integer> leftRange = this.dx.bucketRange(leftBucket, false);
+        Pair<Integer, Integer> rightRange = this.dx.bucketRange(rightBucket, false);
+
+        int x0 = leftRange.first;
+        int x1 = rightRange.second;
+
+        Noise noise = new Noise();
+        this.noiseForRange(x0, x1, rowIdx, rowIdx+1, noise);
+        int nBuckets = rightBucket - leftBucket;
+        long totalValue = 0;
+        for (int i = leftBucket; i < rightBucket; i++) {
+            totalValue += this.heatmap.buckets[i][rowIdx];
+        }
+
+        double noisyCount = totalValue + noise.mean;
+
+        for (int i = leftBucket; i < rightBucket; i++) {
+            this.heatmap.privateBuckets[i][rowIdx] = noisyCount / nBuckets; // averaging is postprocessing, so ok
+            this.heatmap.confidence[i][rowIdx] = noise.getConfidence(); // TODO not sure if this is exactly right
+        }
+
+        if (!notConfident(noisyCount, noise.getConfidence())) {
+            HillviewLogger.instance.info("done! x0: " + x0 + " x1: " + x1 + " total: " + totalValue);
+        }
+
+        // Note that this "confidence" has to be computed using the noisy count, not the true count,
+        // as everything here is postprocessing on the private, noisy histogram.
+        // However, it is ok to recompute the noisy count on top of the true count,
+        // as every possible count in the histogram has been released using the dyadic decomposition.
+        return notConfident(noisyCount, noise.getConfidence());
+    }
+
     /**
-     * Average all values in the heatmap in the specified rectangle.
-     * Compute a new confidence.  Return true if the value is still too noisy.
+     * Coarsen left to right in the rows only.
      */
-    private boolean average(int xCorner, int xRect, int yCorner, int yRect,
-                            List<List<Pair<Integer, Integer>>> xIntervals,
-                            List<List<Pair<Integer, Integer>>> yIntervals,
-                            double scale, double baseVariance, Noise noise) {
-        double value = 0;
-        for (int i = 0; i < xRect; i++) {
-            for (int j = 0; j < yRect; j++) {
-                value += this.heatmap.buckets[xCorner + i][yCorner + j];
+    private void greedyXCoarsen() {
+        int xSize = this.heatmap.xBucketCount;
+        int ySize = this.heatmap.yBucketCount;
+
+        //for (int i = 0; i < xSize; i++) {
+        for (int j = 0; j < ySize; j++) {
+            int i = 0;
+            while (i < xSize) {
+                int rectSize = 1;
+                while ((i + rectSize < xSize) &&
+                        //uncertainCells[i + rectSize][j] && // only merge non-confident cells
+                        (mergeXBuckets(i, i+rectSize, j))) {
+                    rectSize++;
+                }
+                i += rectSize;
             }
         }
-        double average = value / (xRect * yRect);
-        this.noiseForBucket(xIntervals.get(xCorner / xRect), yIntervals.get(yCorner / yRect), scale, baseVariance, noise);
-        double confidence = 2 * Math.sqrt(noise.variance);
-        Converters.checkNull(this.heatmap.confidence);
-        for (int i = 0; i < xRect; i++) {
-            for (int j = 0; j < yRect; j++) {
-                this.heatmap.buckets[xCorner + i][yCorner + j] = (long)average;
-                this.heatmap.confidence[i][j] = (int)confidence;
-            }
-        }
-        return notConfident((long)average, (int)confidence);
     }
 }

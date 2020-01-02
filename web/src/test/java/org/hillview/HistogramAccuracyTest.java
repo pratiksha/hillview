@@ -56,7 +56,6 @@ import org.junit.Test;
 import javax.annotation.Nullable;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -143,7 +142,7 @@ public class HistogramAccuracyTest {
      *
      * @param ph The histogram whose accuracy we want to compute.
      * @param totalLeaves The "global" number of leaves in case this histogram is computed only on a zoomed-in range.
-     *                    This is needed to correctly compute the amount of noise to add to each leaf.
+     *                    This is needed to correctly compute the amount of mean to add to each leaf.
      * @return The average per-query absolute error.
      */
     private double computeAccuracy(PrivateHistogram ph, int totalLeaves) {
@@ -159,8 +158,8 @@ public class HistogramAccuracyTest {
             for (int right = left; right < ph.histogram.getBucketCount(); right++) {
                 ph.noiseForRange(left, right,
                         scale, baseVariance, noise);
-                sqtot += Math.pow(noise.noise, 2);
-                abstot += Math.abs(noise.noise);
+                sqtot += Math.pow(noise.mean, 2);
+                abstot += Math.abs(noise.mean);
                 n++;
             }
         }
@@ -173,10 +172,43 @@ public class HistogramAccuracyTest {
         return abstot / (double) n;
     }
 
-    private Pair<Double, Double> computeSingleColumnAccuracy(String col, ColumnQuantization cq, double epsilon, IDataSet<ITable> table,
-                                             int iterations) {
-        // Construct a histogram corresponding to the leaves.
-        // We will manually aggregate buckets as needed for the accuracy test.
+    /**
+     * Compute the absolute and L2 error vs. ground truth for an instantiation of a private histogram
+     * averaged over all possible range queries.
+     *
+     * @param ph The histogram whose accuracy we want to compute.
+     * @param totalLeaves The "global" number of leaves in case this histogram is computed only on a zoomed-in range.
+     *                    This is needed to correctly compute the amount of mean to add to each leaf.
+     * @return The average per-query absolute error.
+     */
+    /*private double computeAccuracy(PrivateHeatmap ph, int totalLeaves) {
+        double scale = Math.log(totalLeaves) / Math.log(2);
+        scale /= ph.getEpsilon();
+        double baseVariance = 2 * Math.pow(scale, 2);
+        // Do all-intervals accuracy on leaves.
+        int n = 0;
+        double sqtot = 0.0;
+        double abstot = 0.0;
+        Noise noise = new Noise();
+        for (int left = 0; left < ph.heatmap.getBucketCount(); left++) {
+            for (int right = left; right < ph.heatmap.getBucketCount(); right++) {
+                ph.noiseForRange(left, right,
+                        scale, baseVariance, noise);
+                sqtot += Math.pow(noise.mean, 2);
+                abstot += Math.abs(noise.mean);
+                n++;
+            }
+        }
+
+        System.out.println("Bucket count: " + ph.histogram.getBucketCount());
+        System.out.println("Num intervals: " + n);
+        System.out.println("Average absolute error: " + abstot / (double) n);
+        System.out.println("Average L2 error: " + Math.sqrt(sqtot) / (double) n);
+
+        return abstot / (double) n;
+    }*/
+
+    private HistogramRequestInfo createHistogramRequest(String col, ColumnQuantization cq) {
         HistogramRequestInfo info;
         if (cq instanceof DoubleColumnQuantization) {
             DoubleColumnQuantization dq = (DoubleColumnQuantization)cq;
@@ -188,6 +220,14 @@ public class HistogramAccuracyTest {
             info = new HistogramRequestInfo(new ColumnDescription(col, ContentsKind.String),0, sq.leftBoundaries);
         }
 
+        return info;
+    }
+
+    private Pair<Double, Double> computeSingleColumnAccuracy(String col, ColumnQuantization cq, double epsilon, IDataSet<ITable> table,
+                                             int iterations) {
+        // Construct a histogram corresponding to the leaves.
+        // We will manually aggregate buckets as needed for the accuracy test.
+        HistogramRequestInfo info = createHistogramRequest(col, cq);
         HistogramSketch sk = info.getSketch(cq);
         IntervalDecomposition dd = info.getDecomposition(cq);
 
@@ -210,6 +250,46 @@ public class HistogramAccuracyTest {
         }
         return new Pair(totAccuracy / iterations, Utilities.stdev(accuracies));
     }
+
+    /*private Pair<Double, Double> computeHeatmapAccuracy(String col1, String col2, ColumnQuantization cq1,
+                                                        ColumnQuantization cq2,
+                                                        double epsilon, IDataSet<ITable> table,
+                                                        int iterations) {
+        // Construct a histogram corresponding to the leaves.
+        // We will manually aggregate buckets as needed for the accuracy test.
+        HistogramRequestInfo[] info = new HistogramRequestInfo[]
+                {
+                        createHistogramRequest(col1, cq1),
+                        createHistogramRequest(col2, cq2)
+                };
+
+        HeatmapSketch sk = new HeatmapSketch(
+                info[0].getBuckets(),
+                info[1].getBuckets(),
+                info[0].cd.name,
+                info[1].cd.name, 1.0, 0);
+        IntervalDecomposition d0 = info[0].getDecomposition(cq1);
+        IntervalDecomposition d1 = info[1].getDecomposition(cq2);
+
+        System.out.println("Epsilon: " + epsilon);
+        Heatmap heatmap = table.blockingSketch(sk); // Leaf counts.
+        Assert.assertNotNull(heatmap);
+
+        int totalLeaves = d0.getQuantizationIntervalCount() * d1.getQuantizationIntervalCount();
+        TestKeyLoader tkl = new TestKeyLoader();
+
+        ArrayList<Double> accuracies = new ArrayList<>();
+        double totAccuracy = 0.0;
+        for (int i = 0 ; i < iterations; i++) {
+            tkl.setIndex(i);
+            SecureLaplace laplace = new SecureLaplace(tkl);
+            PrivateHeatmap ph = new PrivateHeatmap(d0, d1, heatmap, epsilon, laplace);
+            double acc = computeAccuracy(ph, totalLeaves);
+            accuracies.add(acc);
+            totAccuracy += acc;
+        }
+        return new Pair(totAccuracy / iterations, Utilities.stdev(accuracies));
+    }*/
 
     @Test
     public void computeAccuracyTest() throws IOException {
