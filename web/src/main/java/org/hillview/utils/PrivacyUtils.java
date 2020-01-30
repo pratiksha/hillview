@@ -16,7 +16,9 @@ public class PrivacyUtils {
         double scale = 1;
         for (IntervalDecomposition x : decompositions) {
             int totalLeaves = x.getQuantizationIntervalCount();
-            scale *= Math.ceil(Utilities.logb(totalLeaves, IntervalDecomposition.BRANCHING_FACTOR)); // Ceil for nearest power of b
+
+            // Ceil for nearest power of b
+            scale *= Math.ceil(Utilities.logb(totalLeaves, IntervalDecomposition.BRANCHING_FACTOR));
         }
         scale /= epsilon;
         return scale;

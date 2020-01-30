@@ -40,7 +40,7 @@ public abstract class IntervalDecomposition {
     final int[] bucketQuantizationIndexes;
     final ColumnQuantization quantization;
 
-    public static final int BRANCHING_FACTOR = 20;
+    public static int BRANCHING_FACTOR = 20;
 
     protected IntervalDecomposition(ColumnQuantization quantization, int[] quantizationIndexes) {
         this.bucketQuantizationIndexes = quantizationIndexes;
@@ -85,8 +85,10 @@ public abstract class IntervalDecomposition {
      * Return the k-adic decomposition of this interval, i.e. the decomposition corresponding
      * to a tree with degree k. The decomposition assumes that the first leaf of the k-adic tree
      * is at index 0.
+     *
+     * The intervals returned are in the form (start, size).
      */
-    public static ArrayList<Pair<Integer, Integer>> kadicDecomposition(int left, int right, int k) {
+    public ArrayList<Pair<Integer, Integer>> kadicDecomposition(int left, int right, int k) {
         ArrayList<Pair<Integer, Integer>> nodes = new ArrayList<Pair<Integer, Integer>>();
         if (left == right)
             // handles the case -1,-1
@@ -96,7 +98,7 @@ public abstract class IntervalDecomposition {
             throw new IllegalArgumentException("Invalid interval bounds: " + left + ":" + right);
         }
 
-        if (right - left == k) {
+        if (BRANCHING_FACTOR < 0 || right - left == this.getQuantizationIntervalCount()) {
             // no root node
             for (int i = left; i < right; i++) {
                 nodes.add(new Pair<Integer, Integer>(i, 1));
@@ -109,10 +111,10 @@ public abstract class IntervalDecomposition {
             // smallest power of k that divides left
             int smallestPower = -1;
             if (left > 0) {
-                smallestPower = Utilities.toInt(Math.floor(Math.log(left) / Math.log(k)));
+                smallestPower = Utilities.toInt(Math.floor(Utilities.logb(left, k)));
             }
             // largest power of k that actually fits in remaining interval
-            int rem = Utilities.toInt((Math.log(right - left) / Math.log(k)));
+            int rem = Utilities.toInt(Utilities.logb(right-left, k));
             // largest valid covering interval
             int pow = smallestPower < 0 ? rem : Math.min(smallestPower, rem);
             int nodeEnd = Utilities.toInt(Math.pow(k, pow));
@@ -157,7 +159,7 @@ public abstract class IntervalDecomposition {
     @SuppressWarnings("SameParameterValue")
     List<Pair<Integer, Integer>> bucketDecomposition(int bucketIdx, boolean cdf) {
         Pair<Integer, Integer> range = this.bucketRange(bucketIdx, cdf);
-        return IntervalDecomposition.kadicDecomposition(
+        return this.kadicDecomposition(
             Converters.checkNull(range.first), Converters.checkNull(range.second), BRANCHING_FACTOR);
     }
 

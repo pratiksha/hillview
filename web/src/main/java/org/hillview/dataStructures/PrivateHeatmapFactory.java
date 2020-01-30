@@ -8,8 +8,6 @@ import org.hillview.utils.*;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.hillview.dataStructures.IntervalDecomposition.kadicDecomposition;
-
 /**
  * This class is used to add noise to a heatmap.
  */
@@ -43,6 +41,27 @@ public class PrivateHeatmapFactory {
         this.addDyadicLaplaceNoise(d0, d1);
     }
 
+    public PrivateHeatmapFactory(int columnsIndex,
+                                 IntervalDecomposition d0, IntervalDecomposition d1, Heatmap heatmap, double epsilon,
+                                 SecureLaplace laplace, boolean addNoise) {
+        this.columnsIndex = columnsIndex;
+
+        this.heatmap = heatmap;
+        this.epsilon = epsilon;
+        this.laplace = laplace;
+
+        this.dx = d0;
+        this.dy = d1;
+
+        this.scale = PrivacyUtils.computeNoiseScale(this.epsilon, d0, d1);
+        this.baseVariance = PrivacyUtils.laplaceVariance(scale);
+
+        if (addNoise) {
+            // For benchmarking. If false, add noise manually.
+            this.addDyadicLaplaceNoise(d0, d1);
+        }
+    }
+
     /**
      * Compute noise to add to this bucket using the dyadic decomposition as the PRG seed.
      * If cdfBuckets is true, computes the noise based on the dyadic decomposition of the interval [0, bucket right leaf]
@@ -65,8 +84,8 @@ public class PrivateHeatmapFactory {
 
     public void noiseForRange(int left, int right, int top, int bot,
                               double scale, double baseVariance, /*out*/Noise result) {
-        List<Pair<Integer, Integer>> xIntervals = kadicDecomposition(left, right, IntervalDecomposition.BRANCHING_FACTOR);
-        List<Pair<Integer, Integer>> yIntervals = kadicDecomposition(top, bot, IntervalDecomposition.BRANCHING_FACTOR);
+        List<Pair<Integer, Integer>> xIntervals = dx.kadicDecomposition(left, right, IntervalDecomposition.BRANCHING_FACTOR);
+        List<Pair<Integer, Integer>> yIntervals = dy.kadicDecomposition(top, bot, IntervalDecomposition.BRANCHING_FACTOR);
 
         noiseForDecomposition(xIntervals, yIntervals, scale, baseVariance, result);
     }

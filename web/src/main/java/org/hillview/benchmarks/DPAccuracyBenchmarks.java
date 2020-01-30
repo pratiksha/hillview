@@ -60,11 +60,11 @@ import java.util.List;
 import java.util.logging.Level;
 
 public class DPAccuracyBenchmarks extends Benchmarks {
-    private static String ontime_directory = "../data/ontime_private/";
+    private static String ontime_directory = "data/ontime_private/";
     private static String privacy_metadata_name = "privacy_metadata.json";
 
-    private static final String histogram_results_filename = "../results/ontime_private_histogram.json";
-    private static final String heatmap_results_filename = "../results/ontime_private_heatmap.json";
+    private static final String histogram_results_filename = "results/ontime_private_histogram_binary.json";
+    private static final String heatmap_results_filename = "results/ontime_private_heatmap_binary.json";
 
     String resultsFilename;
 
@@ -76,7 +76,7 @@ public class DPAccuracyBenchmarks extends Benchmarks {
     IDataSet<ITable> loadData() {
         try {
             FileSetDescription fsd = new FileSetDescription();
-            fsd.fileNamePattern = "../data/ontime_private/????_*.csv*";
+            fsd.fileNamePattern = "data/ontime_private/????_*.csv*";
             fsd.fileKind = "csv";
             fsd.schemaFile = "short.schema";
 
@@ -109,27 +109,95 @@ public class DPAccuracyBenchmarks extends Benchmarks {
      * @param decomposition The leaf specification for the histogram.
      * @return The average per-query absolute error.
      */
-    private double computeAccuracy(PrivateHistogram ph, IntervalDecomposition decomposition, SecureLaplace laplace) {
+    private double computeSampledAccuracy(PrivateHistogram ph, IntervalDecomposition decomposition, SecureLaplace laplace,
+                                          int nsamples, int seed, boolean useIdentity) {
         double scale = PrivacyUtils.computeNoiseScale(ph.getEpsilon(), decomposition);
+        if (useIdentity) {
+            IntervalDecomposition.BRANCHING_FACTOR = -1;
+            scale = 1.0 / ph.getEpsilon();
+        }
         double baseVariance = PrivacyUtils.laplaceVariance(scale);
         // Do all-intervals accuracy on leaves.
         int n = 0;
         double sqtot = 0.0;
         double abstot = 0.0;
+        double wcError = 0.0;
         Noise noise = new Noise();
+        long totalIntervals = 0;
+        Randomness rand = new Randomness(seed);
+
+        for (int i = 0; i < nsamples; i++) {
+            int left = rand.nextInt(decomposition.getQuantizationIntervalCount());
+            int right = left + rand.nextInt(decomposition.getQuantizationIntervalCount() - left);
+            long numInts = ph.noiseForRange(left, right, scale, baseVariance, laplace, noise);
+            totalIntervals += numInts;
+            double error = noise.getNoise();
+            sqtot += Math.pow(error, 2);
+            double abs = Math.abs(error);
+            abstot += abs;
+            if (abs > wcError) {
+                wcError = abs;
+            }
+
+            n++;
+        }
+
+        //System.out.println("Average interval size: " + totalIntervals / (double)n);
+        //System.out.println("Bucket count: " + ph.histogram.getBucketCount());
+        //System.out.println("Num intervals: " + n);
+        System.out.println("Average absolute error: " + abstot / (double) n);
+        System.out.println("Average L2 error: " + Math.sqrt(sqtot) / (double) n);
+        System.out.println("Worst-case error: " + wcError);
+
+        return abstot / (double) n;
+    }
+
+
+    /**
+     * Compute the absolute and L2 error vs. ground truth for an instantiation of a private histogram
+     * averaged over all possible range queries.
+     *
+     * @param ph The histogram whose accuracy we want to compute.
+     * @param decomposition The leaf specification for the histogram.
+     * @return The average per-query absolute error.
+     */
+    private double computeAccuracy(PrivateHistogram ph, IntervalDecomposition decomposition, SecureLaplace laplace,
+                                   boolean roundToZero) {
+
+        double scale = PrivacyUtils.computeNoiseScale(ph.getEpsilon(), decomposition);
+        //double scale = 1.0;
+        //System.out.println("Scale: " + scale);
+        double baseVariance = PrivacyUtils.laplaceVariance(scale);
+        // Do all-intervals accuracy on leaves.
+        int n = 0;
+        double sqtot = 0.0;
+        double abstot = 0.0;
+        double wcError = 0.0;
+        Noise noise = new Noise();
+
+        long totalIntervals = 0;
         for (int left = 0; left < ph.histogram.getBucketCount(); left++) {
-            for (int right = left; right < ph.histogram.getBucketCount(); right++) {
-                ph.noiseForRange(left, right, scale, baseVariance, laplace, noise);
-                sqtot += Math.pow(noise.getNoise(), 2);
-                abstot += Math.abs(noise.getNoise());
+            for (int right = left + 1; right < ph.histogram.getBucketCount(); right++) {
+                long numInts = ph.noiseForRange(left, right, scale, baseVariance, laplace, noise);
+                totalIntervals += numInts;
+                double error = noise.getNoise();
+                sqtot += Math.pow(error, 2);
+                double abs = Math.abs(noise.getNoise());
+                abstot += abs;
+                if (abs > wcError) {
+                    wcError = abs;
+                }
+
                 n++;
             }
         }
 
-        System.out.println("Bucket count: " + ph.histogram.getBucketCount());
-        System.out.println("Num intervals: " + n);
+        //System.out.println("Average interval size: " + totalIntervals / (double)n);
+        //System.out.println("Bucket count: " + ph.histogram.getBucketCount());
+        //System.out.println("Num intervals: " + n);
         System.out.println("Average absolute error: " + abstot / (double) n);
         System.out.println("Average L2 error: " + Math.sqrt(sqtot) / (double) n);
+        System.out.println("Worst-case error: " + wcError);
 
         return abstot / (double) n;
     }
@@ -143,27 +211,34 @@ public class DPAccuracyBenchmarks extends Benchmarks {
      * @param yd The leaf specification for the y-axis.
      * @return The average per-query absolute error.
      */
-    private Double computeAccuracy(PrivateHeatmapFactory ph, IntervalDecomposition xd, IntervalDecomposition yd) {
+    private Double computeSampledAccuracy(PrivateHeatmapFactory ph, IntervalDecomposition xd, IntervalDecomposition yd,
+                                          int nsamples, int seed, boolean useIdentity) {
         double scale = PrivacyUtils.computeNoiseScale(ph.getEpsilon(), xd, yd);
+        if (useIdentity) {
+            IntervalDecomposition.BRANCHING_FACTOR = -1;
+            scale = 1.0 / ph.getEpsilon();
+        }
         double baseVariance = PrivacyUtils.laplaceVariance(scale);
 
-        // Do all-intervals accuracy on leaves.
+        // Do subsampled all-intervals accuracy on leaves.
         int n = 0;
         double sqtot = 0.0;
         double abstot = 0.0;
         Noise noise = new Noise();
-        for (int left = 0; left < ph.heatmap.getXBucketCount(); left++) {
-            for (int right = left; right < ph.heatmap.getXBucketCount(); right++) {
-                for (int top = 0; top < ph.heatmap.getYBucketCount(); top++) {
-                    for (int bot = top; bot < ph.heatmap.getYBucketCount(); bot++) {
-                        ph.noiseForRange(left, right, top, bot,
-                                scale, baseVariance, noise);
-                        sqtot += Math.pow(noise.getNoise(), 2);
-                        abstot += Math.abs(noise.getNoise());
-                        n++;
-                    }
-                }
-            }
+        Randomness rand = new Randomness(seed);
+
+        for (int i = 0; i < nsamples; i++) {
+            int left = rand.nextInt(xd.getQuantizationIntervalCount());
+            int right = left + rand.nextInt(xd.getQuantizationIntervalCount() - left);
+            int top = rand.nextInt(yd.getQuantizationIntervalCount());
+            int bot = top + rand.nextInt(yd.getQuantizationIntervalCount() - top);
+
+            ph.noiseForRange(left, right, top, bot, scale, baseVariance, noise);
+
+            double error = noise.getNoise();
+            sqtot += Math.pow(error, 2);
+            abstot += Math.abs(error);
+            n++;
         }
 
         System.out.println("Bucket count: " + ph.heatmap.getXBucketCount() * ph.heatmap.getYBucketCount());
@@ -193,7 +268,7 @@ public class DPAccuracyBenchmarks extends Benchmarks {
 
     private Pair<Double, Double> computeSingleColumnAccuracy(String col, int colIndex,
                                                              ColumnQuantization cq, double epsilon, IDataSet<ITable> table,
-                                             int iterations) {
+                                                             int iterations, boolean useIdentity) {
         // Construct a histogram corresponding to the leaves.
         // We will manually aggregate buckets as needed for the accuracy test.
         HistogramRequestInfo info = createHistogramRequest(col, cq);
@@ -209,12 +284,14 @@ public class DPAccuracyBenchmarks extends Benchmarks {
 
         ArrayList<Double> accuracies = new ArrayList<>();
         double totAccuracy = 0.0;
+        int nsamples = 500;
         for (int i = 0 ; i < iterations; i++) {
             tkl.setIndex(i);
             SecureLaplace laplace = new SecureLaplace(tkl);
             PrivateHistogram ph = new PrivateHistogram(colIndex, 
                                                        dd, hist, epsilon, false, laplace);
-            double acc = computeAccuracy(ph, dd, laplace);
+            double acc = computeSampledAccuracy(ph, dd, laplace, nsamples, i, useIdentity);
+            //double acc = computeAccuracy(ph, dd, laplace, true);
             accuracies.add(acc);
             totAccuracy += acc;
         }
@@ -225,7 +302,7 @@ public class DPAccuracyBenchmarks extends Benchmarks {
                                                         String col2, ColumnQuantization cq2,
                                                         int columnsIndex,
                                                         double epsilon, IDataSet<ITable> table,
-                                                        int iterations) {
+                                                        int iterations, boolean useIdentity) {
         // Construct a histogram corresponding to the leaves.
         // We will manually aggregate buckets as needed for the accuracy test.
         HistogramRequestInfo[] info = new HistogramRequestInfo[]
@@ -252,18 +329,19 @@ public class DPAccuracyBenchmarks extends Benchmarks {
 
         ArrayList<Double> accuracies = new ArrayList<>();
         double totAccuracy = 0.0;
+        int nsamples = 5000;
         for (int i = 0 ; i < iterations; i++) {
             tkl.setIndex(i);
             SecureLaplace laplace = new SecureLaplace(tkl);
             PrivateHeatmapFactory ph = new PrivateHeatmapFactory(columnsIndex, d0, d1, heatmap, epsilon, laplace);
-            double acc = computeAccuracy(ph, d0, d1);
+            double acc = computeSampledAccuracy(ph, d0, d1, nsamples, i, useIdentity);
             accuracies.add(acc);
             totAccuracy += acc;
         }
         return new Pair<Double, Double>(totAccuracy / iterations, Utilities.stdev(accuracies));
     }
 
-    public void benchmarkHistogramL2Accuracy() throws IOException {
+    public void benchmarkHistogramL2Accuracy(boolean useIdentity) throws IOException {
         HillviewLogger.instance.setLogLevel(Level.OFF);
         @Nullable
         IDataSet<ITable> table = this.loadData();
@@ -280,15 +358,16 @@ public class DPAccuracyBenchmarks extends Benchmarks {
         Assert.assertNotNull(mdSchema.quantization);
 
         HashMap<String, ArrayList<Double>> results = new HashMap<String, ArrayList<Double>>();
-        int iterations = 5;
+        int iterations = 50;
         for (String col : cols) {
             ColumnQuantization quantization = mdSchema.quantization.get(col);
             Assert.assertNotNull(quantization);
 
             double epsilon = mdSchema.epsilon(col);
 
-            Pair<Double, Double> res = this.computeSingleColumnAccuracy(col, mdSchema.getColumnIndex(col), quantization, epsilon, table, iterations);
-            System.out.println("Averaged absolute error over " + iterations + " iterations: " + res.first);
+            Pair<Double, Double> res = this.computeSingleColumnAccuracy(
+                    col, mdSchema.getColumnIndex(col), quantization, epsilon, table, iterations, useIdentity);
+            System.out.println(col + ": Averaged absolute error over " + iterations + " iterations: " + res.first);
 
             // for JSON parsing convenience
             ArrayList<Double> resArr = new ArrayList<Double>();
@@ -305,7 +384,7 @@ public class DPAccuracyBenchmarks extends Benchmarks {
         writer.close();
     }
 
-    public void benchmarkHeatmapL2Accuracy() throws IOException {
+    public void benchmarkHistogramBranching() throws IOException {
         HillviewLogger.instance.setLogLevel(Level.OFF);
         @Nullable
         IDataSet<ITable> table = this.loadData();
@@ -322,9 +401,113 @@ public class DPAccuracyBenchmarks extends Benchmarks {
         Assert.assertNotNull(mdSchema.quantization);
 
         HashMap<String, ArrayList<Double>> results = new HashMap<String, ArrayList<Double>>();
+        int maxBranch = 1000;
+        int iterations = 10;
+        String col = "DepDelay";
+        ColumnQuantization quantization = mdSchema.quantization.get(col);
+        Assert.assertNotNull(quantization);
+
+        for (int i = 2; i <= maxBranch; i += 50) {
+            IntervalDecomposition.BRANCHING_FACTOR = i;
+
+            String key = Integer.toString(i);
+            double epsilon = mdSchema.epsilon(col);
+
+            Pair<Double, Double> res = this.computeSingleColumnAccuracy(col, mdSchema.getColumnIndex(col), quantization, epsilon, table, iterations, false);
+            System.out.println("Averaged absolute error over " + iterations + " iterations: " + res.first);
+
+            // for JSON parsing convenience
+            ArrayList<Double> resArr = new ArrayList<Double>();
+            resArr.add(res.first); // noise
+            resArr.add(res.second); // stdev
+
+            results.put(key, resArr);
+            System.out.println("Key: " + key + ", mean: " + res.first);
+        }
+
+        FileWriter writer = new FileWriter("histogram_branching_results.json");
+        Gson resultsGson = new GsonBuilder().create();
+        writer.write(resultsGson.toJson(results));
+        writer.flush();
+        writer.close();
+    }
+
+    public void benchmarkHeatmapBranching() throws IOException {
+        HillviewLogger.instance.setLogLevel(Level.OFF);
+        @Nullable
+        IDataSet<ITable> table = this.loadData();
+        if (table == null) {
+            System.out.println("Skipping test: no data");
+            return;
+        }
+
+        Schema schema = this.loadSchema(table);
+        List<String> cols = schema.getColumnNames();
+
+        PrivacySchema mdSchema = PrivacySchema.loadFromFile(ontime_directory + privacy_metadata_name);
+        Assert.assertNotNull(mdSchema);
+        Assert.assertNotNull(mdSchema.quantization);
+
+        HashMap<String, ArrayList<Double>> results = new HashMap<String, ArrayList<Double>>();
+        int maxBranch = 400;
         int iterations = 5;
-        for (String col1 : cols) {
-            for (String col2 : cols) {
+        String col1 = "FlightDate";
+        String col2 = "OriginState";
+        ColumnQuantization q1 = mdSchema.quantization.get(col1);
+        Assert.assertNotNull(q1);
+        ColumnQuantization q2 = mdSchema.quantization.get(col2);
+        Assert.assertNotNull(q2);
+
+        for (int i = 2; i <= maxBranch; i ++) {
+            IntervalDecomposition.BRANCHING_FACTOR = i;
+
+            String key = Integer.toString(i);
+            double epsilon = mdSchema.epsilon(col1, col2);
+
+            Pair<Double, Double> res = this.computeHeatmapAccuracy(col1, q1, col2, q2, mdSchema.getColumnIndex(col1, col2),
+                    epsilon, table, iterations, false);
+            System.out.println("Averaged absolute error over " + iterations + " iterations: " + res.first);
+
+            // for JSON parsing convenience
+            ArrayList<Double> resArr = new ArrayList<Double>();
+            resArr.add(res.first); // noise
+            resArr.add(res.second); // stdev
+
+            System.out.println("Key: " + key + ", mean: " + res.first);
+            results.put(key, resArr);
+        }
+
+        FileWriter writer = new FileWriter("branching_results.json");
+        Gson resultsGson = new GsonBuilder().create();
+        writer.write(resultsGson.toJson(results));
+        writer.flush();
+        writer.close();
+    }
+
+
+    public void benchmarkHeatmapL2Accuracy(boolean useIdentity) throws IOException {
+        HillviewLogger.instance.setLogLevel(Level.OFF);
+        @Nullable
+        IDataSet<ITable> table = this.loadData();
+        if (table == null) {
+            System.out.println("Skipping test: no data");
+            return;
+        }
+
+        Schema schema = this.loadSchema(table);
+        List<String> cols = schema.getColumnNames();
+
+        PrivacySchema mdSchema = PrivacySchema.loadFromFile(ontime_directory + privacy_metadata_name);
+        Assert.assertNotNull(mdSchema);
+        Assert.assertNotNull(mdSchema.quantization);
+
+        HashMap<String, ArrayList<Double>> results = new HashMap<String, ArrayList<Double>>();
+        int iterations = 10;
+        for (int i = 0; i < cols.size(); i++) {
+            for (int j = i+1; j < cols.size(); j++) {
+                String col1 = cols.get(i);
+                String col2 = cols.get(j);
+
                 if (col1.equals(col2)) continue;
 
                 ColumnQuantization q1 = mdSchema.quantization.get(col1);
@@ -333,10 +516,11 @@ public class DPAccuracyBenchmarks extends Benchmarks {
                 Assert.assertNotNull(q2);
 
                 String key = mdSchema.getKeyForColumns(col1, col2);
-                double epsilon = mdSchema.epsilon(key);
+                double epsilon = mdSchema.epsilon(col1, col2);
+                //double epsilon = 1.0;
 
                 Pair<Double, Double> res = this.computeHeatmapAccuracy(col1, q1, col2, q2, mdSchema.getColumnIndex(col1, col2),
-                        epsilon, table, iterations);
+                        epsilon, table, iterations, useIdentity);
                 System.out.println("Averaged absolute error over " + iterations + " iterations: " + res.first);
 
                 // for JSON parsing convenience
@@ -363,6 +547,9 @@ public class DPAccuracyBenchmarks extends Benchmarks {
 
         String resultsFilename = args[0];
         DPAccuracyBenchmarks bench = new DPAccuracyBenchmarks(resultsFilename);
-        bench.benchmarkHeatmapL2Accuracy();
+        double timeStart = System.currentTimeMillis();
+        double timeEnd = System.currentTimeMillis();
+
+        System.out.println("Benchmark took " + (timeEnd - timeStart) / 1000 + " seconds.");
     }
 }

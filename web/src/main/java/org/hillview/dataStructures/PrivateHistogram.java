@@ -23,6 +23,7 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
     private int missingConfidence;  // Confidence for the missing value
     private final double epsilon;
     private final int columnIndex;
+    private final IntervalDecomposition decomposition;
 
     public PrivateHistogram(int columnIndex,
                             IntervalDecomposition decomposition,
@@ -33,6 +34,7 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
         this.epsilon = epsilon;
         this.confidence  = new int[histogram.getBucketCount()];
         this.missingConfidence = 0;
+        this.decomposition = decomposition;
         long numRngCalls = this.addDyadicLaplaceNoise(decomposition, laplace);
         HillviewLogger.instance.info("RNG calls", "{0}", numRngCalls);
         if (isCdf) {
@@ -48,7 +50,8 @@ public class PrivateHistogram extends HistogramPrefixSum implements IJson {
                               double scale, double baseVariance,
                               SecureLaplace laplace,
                              /*out*/Noise noise) {
-        List<Pair<Integer, Integer>> intervals = IntervalDecomposition.kadicDecomposition(left, right, IntervalDecomposition.BRANCHING_FACTOR);
+        List<Pair<Integer, Integer>> intervals =
+                this.decomposition.kadicDecomposition(left, right, IntervalDecomposition.BRANCHING_FACTOR);
         noise.clear();
         for (Pair<Integer, Integer> x : intervals) {
             noise.add(laplace.sampleLaplace(this.columnIndex, scale, x), baseVariance);
